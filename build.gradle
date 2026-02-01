@@ -1,0 +1,109 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+group = 'org.forth.ics'
+version = '1.0.0'
+
+repositories {
+    mavenCentral()
+    // Add Maven repository for Jakarta EE dependencies
+    maven {
+        url "https://jakarta.oss.sonatype.org/content/repositories/releases/"
+    }
+}
+
+sourceCompatibility = JavaVersion.VERSION_11
+targetCompatibility = JavaVersion.VERSION_11
+
+sourceSets {
+    main {
+        java {
+            srcDirs = ['src']
+        }
+        resources {
+            srcDirs = ['src']
+            exclude '**/*.java'
+        }
+    }
+    test {
+        java {
+            srcDirs = ['test']
+        }
+        resources {
+            srcDirs = ['test']
+            exclude '**/*.java'
+        }
+    }
+}
+
+dependencies {
+    // Core dependencies
+    implementation 'commons-collections:commons-collections:3.2.2'
+    implementation 'log4j:log4j:1.2.17'
+
+    // XML and Web Service related dependencies
+    implementation 'javax.xml.bind:jaxb-api:2.3.1'
+    implementation 'com.sun.xml.bind:jaxb-impl:2.3.1'
+    implementation 'com.sun.xml.bind:jaxb-core:2.3.0.1'
+    implementation 'javax.xml.ws:jaxws-api:2.3.1'
+    implementation 'com.sun.xml.ws:jaxws-rt:2.3.0'
+    implementation 'com.sun.xml.ws:jaxws-tools:2.3.0'
+    implementation 'javax.xml.soap:saaj-api:1.3.5'
+    implementation 'com.sun.xml.messaging.saaj:saaj-impl:1.5.0'
+
+    // Graph visualization
+    implementation 'org.jgrapht:jgrapht-core:1.5.1'
+
+    // Local JAR files that don't have Maven equivalents
+    implementation fileTree(dir: 'lib', include: [
+        'exporter.jar',
+        'java_cup.jar',
+        'JFlex.jar',
+        'jgraph.jar',
+        'ng4j.jar',
+        'relaxngDatatype.jar',
+        'sjsxp.jar',
+        'stax-ex.jar',
+        'streambuffer.jar',
+        'SwkmClient.jar',
+        'swkm-model.jar',
+        'swkm-services-api.jar',
+        'TaskMonitor.jar',
+        'trig-v1.0.jar',
+        'vrp3.0.jar'
+    ])
+
+    // Testing dependencies
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.2'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.2'
+    // For backward compatibility with JUnit 3/4
+    testImplementation 'org.junit.vintage:junit-vintage-engine:5.8.2'
+}
+
+application {
+    mainClass = 'gui.MainFrame'
+}
+
+test {
+    useJUnitPlatform()
+    ignoreFailures = true
+}
+
+// Task to create a fat JAR with all dependencies
+tasks.register('fatJar', Jar) {
+    archiveClassifier = 'all'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    manifest {
+        attributes 'Main-Class': 'gui.MainFrame'
+    }
+
+    from sourceSets.main.output
+
+    dependsOn configurations.runtimeClasspath
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+}

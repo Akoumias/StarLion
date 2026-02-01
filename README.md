@@ -46,3 +46,66 @@ Multiple namespace support is one of StarLion's distinctive features. The user i
 ## Read More
 
 More details can be found on the public page of StarLion at https://projects.ics.forth.gr/isl/starlion
+
+## Building and Running
+
+### Prerequisites
+- Java Development Kit (JDK) 11 or later
+- Gradle is optional as the project includes a Gradle wrapper
+
+### Building the project
+To build the project, run:
+
+```bash
+# On Linux/macOS
+./gradlew build
+
+# On Windows
+gradlew.bat build
+```
+
+### Running the application
+To run the application, use:
+
+```bash
+# On Linux/macOS
+./gradlew run
+
+# On Windows
+gradlew.bat run
+```
+
+### Creating an executable JAR
+To create a self-contained JAR file with all dependencies:
+
+```bash
+# On Linux/macOS
+./gradlew fatJar
+
+# On Windows
+gradlew.bat fatJar
+```
+
+The JAR file will be created in the `build/libs` directory with the name `StarLion-1.0.0-all.jar`.
+You can run it with:
+
+```bash
+java -jar build/libs/StarLion-1.0.0-all.jar
+```
+
+### Known Issues
+- There is a failing test in `LayoutMetricsTest` that is currently ignored during the build. This test will be fixed in a future update.
+- If you encounter any dependency resolution issues, try running with the `--refresh-dependencies` flag:
+  ```bash
+  ./gradlew build --refresh-dependencies
+  ```
+
+## Migration from Ant to Gradle
+This project has been migrated from Apache Ant to Gradle build system. The old NetBeans Ant build files have been removed, and the project now uses Gradle for building, testing, and packaging.
+
+### Benefits of Gradle
+- Simpler dependency management
+- Better IDE integration
+- More flexible build configuration
+- Improved performance with build caching
+- Standardized project structure
