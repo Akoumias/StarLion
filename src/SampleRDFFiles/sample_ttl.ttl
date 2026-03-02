@@ -1,0 +1,16 @@
+@prefix ex: <http://example.org/starlion#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+ex:GraphEntity a rdfs:Class .
+ex:NodeEntity a rdfs:Class ;
+    rdfs:subClassOf ex:GraphEntity .
+
+ex:connectsTo a rdf:Property ;
+    rdfs:domain ex:NodeEntity ;
+    rdfs:range ex:NodeEntity .
+
+ex:NodeA a ex:NodeEntity ;
+    ex:connectsTo ex:NodeB .
+
+ex:NodeB a ex:NodeEntity .

@@ -34,7 +34,11 @@ public class InstanceCache {
         contents = new HashMap<String,Integer>();
         dataOrder = new LinkedList<String>();
     }
-    
+
+    public InstanceCache() {
+
+    }
+
 //    public InstanceCache(VisualGraph visualGraph,int size){
 //        visG = visualGraph;
 //        if(size > 0){

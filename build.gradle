@@ -55,6 +55,8 @@ dependencies {
 
     // Graph visualization
     implementation 'org.jgrapht:jgrapht-core:1.5.1'
+    implementation 'org.apache.jena:jena-core:4.10.0'
+    implementation 'org.apache.jena:jena-arq:4.10.0'
 
     // Local JAR files that don't have Maven equivalents
     implementation fileTree(dir: 'lib', include: [
@@ -86,9 +88,25 @@ application {
     mainClass = 'gui.MainFrame'
 }
 
+tasks.named('run') {
+    // Forward backend mode to the application JVM when running via Gradle.
+    def backendMode = System.getProperty('starlion.backend.mode')
+    if (backendMode != null) {
+        systemProperty 'starlion.backend.mode', backendMode
+    }
+}
+
 test {
     useJUnitPlatform()
     ignoreFailures = true
+
+    // Forward selected runtime knobs to the test JVM.
+    ['starlion.benchmark.warmup', 'starlion.benchmark.iterations', 'starlion.backend.mode'].each { key ->
+        def value = System.getProperty(key)
+        if (value != null) {
+            systemProperty key, value
+        }
+    }
 }
 
 // Task to create a fat JAR with all dependencies

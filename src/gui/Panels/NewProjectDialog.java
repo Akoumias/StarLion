@@ -202,7 +202,7 @@ public class NewProjectDialog extends javax.swing.JDialog {
 
         jScrollPane1.setViewportView(jList1);
 
-        jComboBox2.setModel(new javax.swing.DefaultComboBoxModel(new String[] { "LOM2.rdf", "Cidoc.rdf", "Cidoc_Digital.rdfs", "TestFile.rdf", "forcesample.rdf", "ontologyRegistry.rdf", "testSchema1.rdfs", "testSchema1a.rdfs", "testSchema1b.rdfs", "testSchema2.rdfs", "testSchema3.rdfs", "testSchema4.rdfs", "testSchema5.rdfs", "testSchema6.rdfs" }));
+        jComboBox2.setModel(new javax.swing.DefaultComboBoxModel(new String[] { "LOM2.rdf", "Cidoc.rdf", "Cidoc_Digital.rdfs", "TestFile.rdf", "forcesample.rdf", "ontologyRegistry.rdf", "testSchema1.rdfs", "testSchema1a.rdfs", "testSchema1b.rdfs", "testSchema2.rdfs", "testSchema3.rdfs", "testSchema4.rdfs", "testSchema5.rdfs", "testSchema6.rdfs", "sample_ttl.ttl", "sample_owl.owl" }));
         jComboBox2.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 jComboBox2ActionPerformed(evt);
@@ -623,6 +623,10 @@ public class NewProjectDialog extends javax.swing.JDialog {
             fileName = "/SampleRDFFiles/testSchema5.rdfs";
         }else if (fileName.equals("testSchema6.rdfs")){
             fileName = "/SampleRDFFiles/testSchema6.rdfs";
+        }else if (fileName.equals("sample_ttl.ttl")){
+            fileName = "/SampleRDFFiles/sample_ttl.ttl";
+        }else if (fileName.equals("sample_owl.owl")){
+            fileName = "/SampleRDFFiles/sample_owl.owl";
         }
         nProj.addDocument(fileName, Project.LOCATION_TYPE.CLASSPATH, null);
         if (fileName != null) {

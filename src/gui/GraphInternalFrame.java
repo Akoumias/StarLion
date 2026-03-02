@@ -5,6 +5,8 @@
 
 package gui;
 
+import controller.GraphController;
+import gr.forth.ics.rdfsuite.services.RdfDocument;
 import gr.forth.ics.swkmclient.Client;
 import graphs.Graph;
 import graphs.GraphNode;
@@ -25,9 +27,12 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.beans.PropertyVetoException;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.text.DecimalFormat;
+import java.util.Collection;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.BoxLayout;
@@ -42,6 +47,14 @@ import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
 import javax.swing.JToolBar;
+import mapping.GraphBackendMode;
+import mapping.ParityComparator;
+import mapping.ParityReport;
+import mapping.adapter.JenaCanonicalAdapter;
+import mapping.adapter.SwkmCanonicalAdapter;
+import mapping.canonical.CanonicalGraphSnapshot;
+import mapping.canonical.CanonicalRdfSnapshot;
+import model.RDFModel;
 
 
 /**
@@ -50,6 +63,7 @@ import javax.swing.JToolBar;
  */
 public class GraphInternalFrame extends InternalFrame{
     
+    private GraphController graphController;
     private Graph       graph = null;
     private JPopupMenu 	popup;
     private JScrollPane     spane = null;
@@ -69,7 +83,8 @@ public class GraphInternalFrame extends InternalFrame{
     
     public GraphInternalFrame(String name, Project parent){
         super(name,parent);
-        this.graph = new Graph();
+        this.graphController = new GraphController();
+        this.graph = graphController.getGraphService().getGraph();
 
         //Add popup window facilitate	
 		popup = new JPopupMenu();
@@ -700,9 +715,23 @@ public class GraphInternalFrame extends InternalFrame{
 //                    case SWKM:
 //                    case WEB:
         try {
-            graph.populateGraph(getParentProj().getModel());
+            graphController.populateGraph(getParentProj().getModel());
         } catch (Exception e) {
-            Logger.getLogger(GraphInternalFrame.class.getName()).log(Level.SEVERE, null, e);
+            // In Jena-only mode the legacy SWKM model can be empty. First try
+            // canonical/Jena-driven graph population, then fallback to SWKM bridge.
+            if (populateGraphUsingCanonicalSnapshot()) {
+                Logger.getLogger(GraphInternalFrame.class.getName()).log(
+                        Level.INFO,
+                        "[VISUALIZATION JENA] Built graph directly from canonical snapshot."
+                );
+            } else if (populateGraphUsingCompatibilitySwkmModel()) {
+                Logger.getLogger(GraphInternalFrame.class.getName()).log(
+                        Level.INFO,
+                        "[VISUALIZATION FALLBACK] Used SWKM compatibility model for graph rendering."
+                );
+            } else {
+                Logger.getLogger(GraphInternalFrame.class.getName()).log(Level.SEVERE, null, e);
+            }
         }
 //                        break;
 //                    case TXT:
@@ -711,13 +740,15 @@ public class GraphInternalFrame extends InternalFrame{
             for(String ns:graph.getNamespaces()){
                 InputStream is = getParentProj().getPlainDocAsStream(ns);
                 if(is != null){
-                    graph.populateGraph(is,ns);
+                    graphController.populateGraph(is,ns);
                 }
             }
             
         } catch (IOException ex) {
             Logger.getLogger(GraphInternalFrame.class.getName()).log(Level.SEVERE, null, ex);
         }
+
+        runLegacyParityCheck("GraphInternalFrame.createGraph");
 //                    default:
 //                        assert(false);
 //                    break;
@@ -740,7 +771,151 @@ public class GraphInternalFrame extends InternalFrame{
         MouseListener popupListener = new PopupListener(popup);
         graph.getVisualGraph().addMouseListener(popupListener);
     }//end createGraph
+
+    private void runLegacyParityCheck(String operation) {
+        GraphBackendMode mode = GraphBackendMode.resolveDefault();
+        if (mode == GraphBackendMode.SWKM) {
+            return;
+        }
+
+        try {
+            SwkmCanonicalAdapter swkmAdapter = new SwkmCanonicalAdapter();
+            JenaCanonicalAdapter jenaAdapter = new JenaCanonicalAdapter();
+            ParityComparator comparator = new ParityComparator();
+            RDFModel parityModel = resolveSwkmModelForParity();
+
+            CanonicalGraphSnapshot swkmGraphSnapshot = swkmAdapter.fromGraph(graph);
+            CanonicalRdfSnapshot swkmRdfSnapshot = swkmAdapter.fromRdfModel(parityModel);
+
+            CanonicalRdfSnapshot jenaRdfSnapshot = jenaAdapter.fromRdfDocuments(getParentProj().getModelDocuments());
+            CanonicalGraphSnapshot jenaGraphSnapshot = jenaAdapter.toGraphSnapshot(jenaRdfSnapshot);
+
+            ParityReport rdfReport = comparator.compareRdf(swkmRdfSnapshot, jenaRdfSnapshot);
+            logParityReport(operation + " [rdf]", rdfReport);
+
+            ParityReport graphReport = comparator.compareGraph(swkmGraphSnapshot, jenaGraphSnapshot);
+            logParityReport(operation + " [graph]", graphReport);
+            logLegacyBackendStatus(operation, mode, true, rdfReport, graphReport);
+        } catch (Exception ex) {
+            logLegacyBackendStatus(operation, mode, false, null, null);
+            Logger.getLogger(GraphInternalFrame.class.getName()).log(
+                    Level.WARNING,
+                    "[PARITY ERROR] " + operation + " failed",
+                    ex
+            );
+        }
+    }
+
+    private void logParityReport(String operation, ParityReport report) {
+        if (report == null) {
+            return;
+        }
+        if (report.isEquivalent()) {
+            System.out.println("[PARITY OK] " + operation + " -> " + report.getDomain());
+            return;
+        }
+
+        System.out.println("[PARITY FAIL] " + operation + " -> " + report.getDomain()
+                + " mismatches=" + report.getMismatches().size());
+        for (String mismatch : report.getMismatches()) {
+            System.out.println("[PARITY DIFF] " + mismatch);
+        }
+    }
+
+    private void logLegacyBackendStatus(
+            String operation,
+            GraphBackendMode configuredMode,
+            boolean jenaParsable,
+            ParityReport rdfReport,
+            ParityReport graphReport
+    ) {
+        String parityStatus = "N/A";
+        if (rdfReport != null && graphReport != null) {
+            if (rdfReport.isEquivalent() && graphReport.isEquivalent()) {
+                parityStatus = "OK";
+            } else {
+                int mismatches = rdfReport.getMismatches().size() + graphReport.getMismatches().size();
+                parityStatus = "FAIL(" + mismatches + ")";
+            }
+        }
+
+        String effectiveBackend = jenaParsable ? "JENA" : "SWKM_FALLBACK";
+        System.out.println("[BACKEND STATUS] op=" + operation
+                + " configured=" + configuredMode
+                + " effective=" + effectiveBackend
+                + " jena_parsable=" + jenaParsable
+                + " parity=" + parityStatus);
+    }
 	
+    private boolean populateGraphUsingCompatibilitySwkmModel() {
+        try {
+            RDFModel compatibilityModel = buildCompatibilitySwkmModel();
+            graphController.populateGraph(compatibilityModel);
+            return true;
+        } catch (Exception ex) {
+            Logger.getLogger(GraphInternalFrame.class.getName()).log(Level.WARNING,
+                    "[VISUALIZATION FALLBACK] SWKM compatibility model failed.", ex);
+            return false;
+        }
+    }
+
+    private boolean populateGraphUsingCanonicalSnapshot() {
+        try {
+            JenaCanonicalAdapter jenaAdapter = new JenaCanonicalAdapter();
+            CanonicalRdfSnapshot rdfSnapshot = jenaAdapter.fromRdfDocuments(getParentProj().getModelDocuments());
+            CanonicalGraphSnapshot graphSnapshot = jenaAdapter.toGraphSnapshot(rdfSnapshot);
+            graphController.populateGraph(graphSnapshot);
+            return true;
+        } catch (Exception ex) {
+            Logger.getLogger(GraphInternalFrame.class.getName()).log(Level.FINE,
+                    "[VISUALIZATION JENA] Canonical graph population failed.", ex);
+            return false;
+        }
+    }
+
+    private RDFModel buildCompatibilitySwkmModel() {
+        RDFModel compatibilityModel = new RDFModel();
+        Collection<RdfDocument> docs = getParentProj().getModelDocuments();
+        for (RdfDocument doc : docs) {
+            if (doc == null || doc.getContent() == null) {
+                continue;
+            }
+            byte[] bytes = doc.getContent().getBytes(StandardCharsets.UTF_8);
+            String format = normalizeRdfFormat(doc);
+            boolean ok = compatibilityModel.read(
+                    new ByteArrayInputStream(bytes),
+                    doc.getURI(),
+                    format,
+                    true
+            );
+            if (!ok) {
+                throw new IllegalStateException("Failed to load compatibility SWKM model for " + doc.getURI());
+            }
+        }
+        return compatibilityModel;
+    }
+
+    private RDFModel resolveSwkmModelForParity() {
+        RDFModel projectModel = getParentProj().getModel();
+        try {
+            projectModel.getAllInstances();
+            return projectModel;
+        } catch (Exception ignored) {
+            return buildCompatibilitySwkmModel();
+        }
+    }
+
+    private String normalizeRdfFormat(RdfDocument document) {
+        if (document == null || document.getFormat() == null) {
+            return "RDF/XML";
+        }
+        String format = String.valueOf(document.getFormat()).trim();
+        if ("RDF_XML".equalsIgnoreCase(format) || "RDFXML".equalsIgnoreCase(format)) {
+            return "RDF/XML";
+        }
+        return format;
+    }
+
 	/**
 	 * Restore graph for this visualization frame using saved data from specified file
 	 * @param fileName name of the file that contains the saved data needed to restore this frame
@@ -755,7 +930,7 @@ public class GraphInternalFrame extends InternalFrame{
 		//graph.populateGraph(parent.getModel()/*, parent.getNamespaceUri()*/,createIsa);
 		//graph.visualizeGraphElements();
 
-		graph.restoreGraph(getParentProj().getModel(),fileName);
+		graphController.restoreGraph(getParentProj().getModel(),fileName);
 		
 		//Create a new JScrollpane to accommodate visual graph
 		spane = new JScrollPane(graph.getVisualGraph());
@@ -778,7 +953,7 @@ public class GraphInternalFrame extends InternalFrame{
                     int width = this.getWidth();
                     int heigth = this.getHeight();
                     cOfWindow = new Point(width/2,heigth/2);
-		return(graph.updateLayout(layout, params,cOfWindow));
+		return graphController.updateLayout(layout, params,cOfWindow);
 	}//end updateGraph
 	
 	/**
@@ -823,7 +998,7 @@ public class GraphInternalFrame extends InternalFrame{
 	 */
 	public boolean rankGraph(String method, String params){
 //		if(graph.rank(method,params,getParentProj().getNamespaceUri()) != null)
-                if(graph.rank(method,params,getParentProj().getName()) != null)
+                if(graphController.rank(method,params,getParentProj().getName()) != null)
 			return true;
 		else return false;
 	}//end updateGraph

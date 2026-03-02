@@ -5,6 +5,8 @@
 
 package graphs;
 
+import model.GraphModel;
+
 import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -64,7 +66,38 @@ public class Ranker {
         }
     }
 
-    /**
+	/**
+	 * Constructor that initializes the Ranker with a GraphModel
+	 * @param graphModel the graph model to rank
+	 * @author jakoum
+	 */
+	public Ranker(GraphModel graphModel) {
+		// Get the underlying Graph object for now
+		// In the future, we'll directly use the GraphModel's nodes and edges
+		Graph graph = graphModel.getGraph();
+
+		// Initialize with the nodes and edges from the graph
+		Collection<Node> nodes = graph.getNodeList().values();
+		Collection<Edge> edges = graph.getEdgeList().values();
+
+		// Initialize the node list
+		Iterator collectionIt = nodes.iterator();
+		nodeList = new Hashtable<String, Node>(nodes.size());
+		while(collectionIt.hasNext()){
+			Node n = (Node) collectionIt.next();
+			nodeList.put(n.getName(), n);
+		}
+
+		// Initialize the edge list
+		collectionIt = edges.iterator();
+		edgeList = new ArrayList<Edge>(edges.size());
+		while(collectionIt.hasNext()){
+			Edge e = (Edge) collectionIt.next();
+			edgeList.add(e);
+		}
+	}
+
+	/**
      * Get the nodes ranked.
      * @return
      */
@@ -99,7 +132,6 @@ public class Ranker {
     /**
 	 * Graph Degree ranking method
 	 * Calculate node's rank by adding Subclasses+Superclasses+Domains+Ranges
-	 * @param model opened model
 	 * @param namespace_uri chosen namespace
 	 * @return a HashTable with ConnectivityInfo objects that holds all ranks
 	 */
@@ -411,8 +443,10 @@ public class Ranker {
 	/**
 	 * Random Surfer Explicit
 	 * Calculate node's rank using this formula
-	 * @param model opened model
 	 * @param namespace_uri chosen namespace
+	 * @param q1 parameter for the ranking formula
+	 * @param q2 parameter for the ranking formula
+	 * @param q3 parameter for the ranking formula
 	 * @return a HashTable with ConnectivityInfo objects that holds all ranks
 	 */
 	public Hashtable<String, ConnectivityInfo> method2( String namespace_uri,double q1, double q2, double q3){
@@ -420,7 +454,7 @@ public class Ranker {
         this.q1 = q1;
         this.q2 = q2;
         this.q3 = q3;
-        
+
 		//This hashtable will be returned populated for later use in score file generation functions
 		Hashtable<String, ConnectivityInfo> nodeRanks = null;
 		//Allocate memory for the exact number of nodes in this graph
@@ -518,13 +552,12 @@ public class Ranker {
 		return nodeRanks;
 	}//end method5
 
-	
+
 	/**
 	 * Calculate ranks for all nodes using chosen methods and generate the scores file that contains results
 	 * @param fileName file name to save scores
 	 * @param params params used by chosen method(s)
 	 * @param methods chosen method(s) identifier(s)
-	 * @param model opened model
 	 * @param name schema name
 	 * @param namespace_uri chosen namespace
 	 * @return true upon successful file generation, false otherwise

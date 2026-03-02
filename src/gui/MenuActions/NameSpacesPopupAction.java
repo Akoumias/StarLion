@@ -10,6 +10,7 @@ import gui.InternalFrame;
 import gui.ProjectManager;
 import java.awt.Dimension;
 import java.awt.event.ActionEvent;
+import java.util.Collection;
 import javax.swing.AbstractAction;
 import javax.swing.JCheckBox;
 import javax.swing.JList;
@@ -35,7 +36,8 @@ public class NameSpacesPopupAction extends AbstractAction implements MenuActionI
 
     private boolean popUpSelectNamespaces() {
         String fileName = ProjectManager.getSingleton().getActiveProject().getName();
-        String[] nameSpaces = ProjectManager.getSingleton().getActiveProject().getModel().getNamespaces();
+        Collection<String> projectNamespaces = ProjectManager.getSingleton().getActiveProject().getProjectNamespaces();
+        String[] nameSpaces = projectNamespaces.toArray(new String[projectNamespaces.size()]);
         RDFNamespace basicNspace = ProjectManager.getSingleton().getActiveProject().getModel().getNamespace(fileName);
         String basicNSpace = null;
         if (basicNspace != null) {

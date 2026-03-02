@@ -41,6 +41,10 @@ import org.w3c.dom.NodeList;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
+import mapping.canonical.CanonicalEdge;
+import mapping.canonical.CanonicalElementType;
+import mapping.canonical.CanonicalGraphSnapshot;
+import mapping.canonical.CanonicalNode;
 import model.RDFPropertyInstance;
 
 /**
@@ -911,6 +915,119 @@ public class Graph {
         maxYrange = nodeList.size() * 50;
 
     }//end populateGraph
+
+    /**
+     * Populate graph directly from canonical snapshot data.
+     * This is used by the Jena-first visualization path where SWKM model objects
+     * may be intentionally absent.
+     *
+     * @param snapshot canonical graph snapshot
+     */
+    public void populateGraph(CanonicalGraphSnapshot snapshot) {
+        nodeList.clear();
+        edgeList.clear();
+        topKnodeList.clear();
+        starGnodeList.clear();
+        iCache.clear();
+        nameSpaces.clear();
+
+        if (snapshot == null) {
+            maxXrange = 0;
+            maxYrange = 0;
+            return;
+        }
+
+        ArrayList<String> canonicalNamespaces = new ArrayList<String>(snapshot.getNamespaces());
+        nameSpaces.addAll(canonicalNamespaces);
+
+        HashMap<String, Color> namespaceColors = new HashMap<String, Color>();
+        int colorCounter = 0;
+
+        HashMap<String, Node> nodeById = new HashMap<String, Node>();
+        for (CanonicalNode canonicalNode : snapshot.getNodes()) {
+            String nodeName = canonicalNode.getName();
+            if (nodeName == null || nodeName.trim().isEmpty()) {
+                nodeName = Utilities.extractLocalPartFromURI(canonicalNode.getUri());
+            }
+            if (nodeName == null || nodeName.trim().isEmpty()) {
+                nodeName = canonicalNode.getId();
+            }
+            if (nodeName == null || nodeName.trim().isEmpty()) {
+                continue;
+            }
+
+            String namespace = canonicalNode.getNamespace();
+            if (namespace == null || namespace.trim().isEmpty()) {
+                namespace = "";
+            }
+
+            Color color = namespaceColors.get(namespace);
+            if (color == null) {
+                if (colorCounter < defaultNsColors.length) {
+                    color = defaultNsColors[colorCounter];
+                } else {
+                    color = generateNameSpaceColor();
+                }
+                namespaceColors.put(namespace, color);
+                colorCounter++;
+            }
+
+            SEMWEB_OBJECT_TYPE nodeType = canonicalNode.getType() == CanonicalElementType.CLASS_INSTANCE
+                    ? SEMWEB_OBJECT_TYPE.CLASSINSTANCE
+                    : SEMWEB_OBJECT_TYPE.CLASS;
+            Node node = new Node(this, null, nodeName, 0, 0, 0, NodesWidth, NodesHeigth, namespace, nodeType);
+            node.getGraphNode().setNodeGColor(nodeType == SEMWEB_OBJECT_TYPE.CLASSINSTANCE ? instanceColor : color);
+            node.setVisible(canonicalNode.isVisible());
+            node.setNailed(canonicalNode.isNailed());
+            if (node.getGraphNode().getNodeWidth() > NodesCurrentMaxWidth) {
+                NodesCurrentMaxWidth = (int) node.getGraphNode().getNodeWidth();
+            }
+
+            nodeList.put(node.getName(), node);
+            if (canonicalNode.getId() != null) {
+                nodeById.put(canonicalNode.getId(), node);
+            }
+            nodeById.put(node.getName(), node);
+        }
+
+        for (CanonicalEdge canonicalEdge : snapshot.getEdges()) {
+            Node source = nodeById.get(canonicalEdge.getSourceId());
+            Node target = nodeById.get(canonicalEdge.getTargetId());
+            if (source == null || target == null) {
+                continue;
+            }
+
+            SEMWEB_OBJECT_TYPE edgeType = toGraphEdgeType(canonicalEdge.getType());
+            String label = canonicalEdge.getLabel() == null ? "" : canonicalEdge.getLabel();
+            int edgeIndex = source.getEdgesNoToNode(target);
+            Edge edge = new Edge(this, source, target, label, edgeType, edgeIndex, canonicalEdge.isDirected());
+            edge.setVisible(canonicalEdge.isVisible());
+            source.addEdgeFrom(edge);
+            target.addEdgeTo(edge);
+            edgeList.put(canonicalEdge.getId() + source.getName() + target.getName(), edge);
+        }
+
+        maxXrange = nodeList.size() * 120;
+        maxYrange = nodeList.size() * 50;
+    }
+
+    private SEMWEB_OBJECT_TYPE toGraphEdgeType(CanonicalElementType type) {
+        if (type == null) {
+            return SEMWEB_OBJECT_TYPE.PROPERTY;
+        }
+        switch (type) {
+            case SUBCLASS_OF:
+                return SEMWEB_OBJECT_TYPE.SUBCLASSOF;
+            case INSTANCE_OF:
+                return SEMWEB_OBJECT_TYPE.INSTANCEOF;
+            case PROPERTY_INSTANCE:
+                return SEMWEB_OBJECT_TYPE.PROPERTYINSTANCE;
+            case PROPERTY:
+            case UNKNOWN:
+            default:
+                return SEMWEB_OBJECT_TYPE.PROPERTY;
+        }
+    }
 
     //TODO Rethink of this method for making a parser
     public void populateGraph(InputStream inputStream,String streamURI) throws IOException {

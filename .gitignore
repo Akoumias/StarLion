@@ -37,3 +37,10 @@ nbdist/
 # OS-specific files
 .DS_Store
 Thumbs.db
+
+# Cursor/IDE local workspace metadata
+.vscode/
+.metals/
+
+# Local release bundle output
+release/

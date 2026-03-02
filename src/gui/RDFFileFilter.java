@@ -4,7 +4,7 @@ import java.io.File;
 import javax.swing.filechooser.FileFilter;
 
 /**
- * Provides a filter facility for selecting only .rdf files
+ * Provides a filter facility for selecting RDF-like files.
  * @author leonidis
  */
 public class RDFFileFilter extends FileFilter{
@@ -19,7 +19,11 @@ public class RDFFileFilter extends FileFilter{
 			return true;
 		
 		String extension = getExtension(f);
-		if (extension != null && (extension.equalsIgnoreCase("rdf")|| extension.equalsIgnoreCase("rdfs")) )
+        if (extension != null
+                && (extension.equalsIgnoreCase("rdf")
+                || extension.equalsIgnoreCase("rdfs")
+                || extension.equalsIgnoreCase("ttl")
+                || extension.equalsIgnoreCase("owl")))
 			return true;
 		else
 			return false;
@@ -30,7 +34,7 @@ public class RDFFileFilter extends FileFilter{
 	 * Returns a string description of valid files
 	 */
 	public String getDescription() {
-		String desc = ".rdf/rdfs files";
+        String desc = ".rdf/.rdfs/.ttl/.owl files";
 		return desc;
 	}//end getDescription
 	
