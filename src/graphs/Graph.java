@@ -924,21 +924,28 @@ public class Graph {
      * @param snapshot canonical graph snapshot
      */
     public void populateGraph(CanonicalGraphSnapshot snapshot) {
+        ArrayList<String> selectedNamespaces = new ArrayList<String>(nameSpaces);
         nodeList.clear();
         edgeList.clear();
         topKnodeList.clear();
         starGnodeList.clear();
         iCache.clear();
-        nameSpaces.clear();
 
         if (snapshot == null) {
+            nameSpaces.clear();
             maxXrange = 0;
             maxYrange = 0;
             return;
         }
 
         ArrayList<String> canonicalNamespaces = new ArrayList<String>(snapshot.getNamespaces());
-        nameSpaces.addAll(canonicalNamespaces);
+        nameSpaces.clear();
+        if (selectedNamespaces.isEmpty()) {
+            nameSpaces.addAll(canonicalNamespaces);
+        } else {
+            nameSpaces.addAll(selectedNamespaces);
+        }
+        HashSet<String> activeNamespaces = new HashSet<String>(nameSpaces);
 
         HashMap<String, Color> namespaceColors = new HashMap<String, Color>();
         int colorCounter = 0;
@@ -959,6 +966,9 @@ public class Graph {
             String namespace = canonicalNode.getNamespace();
             if (namespace == null || namespace.trim().isEmpty()) {
                 namespace = "";
+            }
+            if (!activeNamespaces.isEmpty() && !activeNamespaces.contains(namespace)) {
+                continue;
             }
 
             Color color = namespaceColors.get(namespace);
@@ -2706,10 +2716,17 @@ public class Graph {
     }
 
     public void setGraphNameSpaces(String[] nspaces) {
-        int i = 0;
-        while (i < nspaces.length) {
-            this.nameSpaces.add(nspaces[i]);
-            i++;
+        this.nameSpaces.clear();
+        if (nspaces == null) {
+            return;
+        }
+        for (String namespace : nspaces) {
+            if (namespace == null || namespace.trim().isEmpty()) {
+                continue;
+            }
+            if (!this.nameSpaces.contains(namespace)) {
+                this.nameSpaces.add(namespace);
+            }
         }
 
     }
