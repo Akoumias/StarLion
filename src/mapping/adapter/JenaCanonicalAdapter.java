@@ -88,7 +88,7 @@ public class JenaCanonicalAdapter {
 
         for (Map.Entry<String, String> ns : model.getNsPrefixMap().entrySet()) {
             if (ns.getValue() != null && !ns.getValue().isEmpty()) {
-                namespaces.add(CanonicalNameUtils.namespace(ns.getValue()));
+                addNamespaceCandidate(namespaces, ns.getValue());
             }
         }
 
@@ -100,7 +100,7 @@ public class JenaCanonicalAdapter {
             if (resource.isURIResource()) {
                 String uri = CanonicalNameUtils.normalizeUri(resource.getURI());
                 classes.add(uri);
-                namespaces.add(CanonicalNameUtils.namespace(uri));
+                addNamespaceCandidate(namespaces, resource.getURI());
             }
         }
 
@@ -110,7 +110,7 @@ public class JenaCanonicalAdapter {
             if (resource.isURIResource()) {
                 String uri = CanonicalNameUtils.normalizeUri(resource.getURI());
                 classes.add(uri);
-                namespaces.add(CanonicalNameUtils.namespace(uri));
+                addNamespaceCandidate(namespaces, resource.getURI());
             }
         }
 
@@ -120,7 +120,7 @@ public class JenaCanonicalAdapter {
             if (resource.isURIResource()) {
                 String uri = CanonicalNameUtils.normalizeUri(resource.getURI());
                 properties.add(uri);
-                namespaces.add(CanonicalNameUtils.namespace(uri));
+                addNamespaceCandidate(namespaces, resource.getURI());
             }
         }
         ResIterator owlObjectPropertyIterator = model.listResourcesWithProperty(RDF.type, OWL.ObjectProperty);
@@ -129,7 +129,7 @@ public class JenaCanonicalAdapter {
             if (resource.isURIResource()) {
                 String uri = CanonicalNameUtils.normalizeUri(resource.getURI());
                 properties.add(uri);
-                namespaces.add(CanonicalNameUtils.namespace(uri));
+                addNamespaceCandidate(namespaces, resource.getURI());
             }
         }
         ResIterator owlDatatypePropertyIterator = model.listResourcesWithProperty(RDF.type, OWL.DatatypeProperty);
@@ -138,7 +138,7 @@ public class JenaCanonicalAdapter {
             if (resource.isURIResource()) {
                 String uri = CanonicalNameUtils.normalizeUri(resource.getURI());
                 properties.add(uri);
-                namespaces.add(CanonicalNameUtils.namespace(uri));
+                addNamespaceCandidate(namespaces, resource.getURI());
             }
         }
 
@@ -148,15 +148,13 @@ public class JenaCanonicalAdapter {
             Resource subject = statement.getSubject();
             Property predicate = statement.getPredicate();
             RDFNode object = statement.getObject();
-
             if (subject.isURIResource()) {
-                String subjectUri = CanonicalNameUtils.normalizeUri(subject.getURI());
-                namespaces.add(CanonicalNameUtils.namespace(subjectUri));
+                addNamespaceCandidate(namespaces, subject.getURI());
             }
             if (predicate != null && predicate.getURI() != null) {
                 String predicateUri = CanonicalNameUtils.normalizeUri(predicate.getURI());
                 properties.add(predicateUri);
-                namespaces.add(CanonicalNameUtils.namespace(predicateUri));
+                addNamespaceCandidate(namespaces, predicate.getURI());
             }
 
             if (RDF.type.equals(predicate) && object.isURIResource()) {
@@ -173,7 +171,9 @@ public class JenaCanonicalAdapter {
                     }
                 }
                 classes.add(objectUri);
-                namespaces.add(CanonicalNameUtils.namespace(objectUri));
+                if (objectResource.getURI() != null) {
+                    addNamespaceCandidate(namespaces, objectResource.getURI());
+                }
             } else if (RDFS.subClassOf.equals(predicate)) {
                 if (subject.isURIResource()) {
                     classes.add(CanonicalNameUtils.normalizeUri(subject.getURI()));
@@ -195,7 +195,7 @@ public class JenaCanonicalAdapter {
                 if (object.isURIResource()) {
                     String objectUri = CanonicalNameUtils.normalizeUri(object.asResource().getURI());
                     classes.add(objectUri);
-                    namespaces.add(CanonicalNameUtils.namespace(objectUri));
+                    addNamespaceCandidate(namespaces, object.asResource().getURI());
                 }
                 String subjectUri = subject.isURIResource()
                         ? CanonicalNameUtils.normalizeUri(subject.getURI())
@@ -216,10 +216,8 @@ public class JenaCanonicalAdapter {
                     propertyInstances.add(subjectUri + "|" + predicateUri + "|" + objectValue);
                 }
             }
-
-            if (object.isURIResource()) {
-                String objectUri = CanonicalNameUtils.normalizeUri(object.asResource().getURI());
-                namespaces.add(CanonicalNameUtils.namespace(objectUri));
+            if (object.isURIResource() && object.asResource().getURI() != null) {
+                addNamespaceCandidate(namespaces, object.asResource().getURI());
             }
         }
 
@@ -632,6 +630,31 @@ public class JenaCanonicalAdapter {
                 || RDFS.label.getURI().equals(predicateUri)
                 || RDFS.seeAlso.getURI().equals(predicateUri)
                 || RDFS.isDefinedBy.getURI().equals(predicateUri);
+    }
+
+    private void addNamespaceCandidate(Set<String> namespaces, String value) {
+        String namespace = CanonicalNameUtils.namespace(value);
+        if (shouldIncludeNamespace(namespace)) {
+            namespaces.add(namespace);
+        }
+    }
+
+    private boolean shouldIncludeNamespace(String namespace) {
+        if (namespace == null) {
+            return false;
+        }
+        String trimmed = namespace.trim();
+        if (trimmed.isEmpty()) {
+            return false;
+        }
+        String lower = trimmed.toLowerCase(java.util.Locale.ROOT);
+        if (lower.startsWith("file:/")) {
+            return false;
+        }
+        if (trimmed.startsWith("/") || trimmed.matches("^[A-Za-z]:/.*")) {
+            return false;
+        }
+        return true;
     }
 
     private void addResourceUri(Set<String> sink, org.apache.jena.rdf.model.Resource resource) {

@@ -129,7 +129,9 @@ public class ParityComparator {
             if (ns == null) {
                 continue;
             }
-            if ("SampleRDFFiles/".equals(ns)) {
+            // Ignore local sample document pseudo-namespaces (e.g. SampleRDFFiles/LOM2.rdf#)
+            // because Jena namespace extraction is intentionally prefix-driven now.
+            if (ns.startsWith("SampleRDFFiles/")) {
                 continue;
             }
             filtered.add(ns);
