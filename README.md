@@ -16,6 +16,16 @@ It now supports an incremental backend migration from SWKM to Apache Jena, with 
 
 - Clone the repository or copy the project folder.
 - Open a terminal in the project root (where `gradlew` and `build.gradle` are).
+- Ensure Gradle wrapper files exist, especially:
+  - `gradlew` / `gradlew.bat`
+  - `gradle/wrapper/gradle-wrapper.properties`
+  - `gradle/wrapper/gradle-wrapper.jar`
+
+If `gradle/wrapper/gradle-wrapper.jar` is missing, regenerate wrapper files on a machine with Gradle installed:
+
+```bash
+gradle wrapper --gradle-version 8.13
+```
 
 ### Verify environment
 
