@@ -126,6 +126,11 @@ public class GraphService {
     public void populateGraph(InputStream inputStream, String streamURI) throws java.io.IOException {
         byte[] payload = readAllBytes(inputStream);
         graph.populateGraph(new ByteArrayInputStream(payload), streamURI);
+        if (isPlainTextGraphStream(streamURI)) {
+            lastParityReport = null;
+            notifyObservers();
+            return;
+        }
 
         if (backendMode == GraphBackendMode.DUAL || backendMode == GraphBackendMode.JENA) {
             CanonicalGraphSnapshot swkmGraph = swkmAdapter.fromGraph(graph);
@@ -141,6 +146,14 @@ public class GraphService {
             lastParityReport = null;
         }
         notifyObservers();
+    }
+
+    private boolean isPlainTextGraphStream(String streamURI) {
+        if (streamURI == null) {
+            return false;
+        }
+        String normalized = streamURI.trim().toLowerCase();
+        return normalized.endsWith(".txt") || normalized.endsWith(".txt#");
     }
 
     /**

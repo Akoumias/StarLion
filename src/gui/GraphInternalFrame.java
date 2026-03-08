@@ -707,6 +707,9 @@ public class GraphInternalFrame extends InternalFrame{
      */
     public void createGraph(String layout, String params) {
 //		graph =  new Graph();
+        boolean graphPopulated = false;
+        GraphBackendMode configuredMode = GraphBackendMode.resolveDefault();
+        boolean hasSelectedPlainDocuments = hasSelectedPlainDocuments();
 
         //Populate graph with nodes from RDFModel and visualize them
 //                switch(getParentProj().getProjectType()){
@@ -714,50 +717,75 @@ public class GraphInternalFrame extends InternalFrame{
 //                    case RDF_TRIG:
 //                    case SWKM:
 //                    case WEB:
-        try {
-            graphController.populateGraph(getParentProj().getModel());
-        } catch (Exception e) {
-            // In Jena-only mode the legacy SWKM model can be empty. First try
-            // canonical/Jena-driven graph population, then fallback to SWKM bridge.
+        if (configuredMode == GraphBackendMode.JENA && !hasSelectedPlainDocuments) {
+            // In JENA mode, avoid touching legacy SWKM model unless explicitly needed.
             if (populateGraphUsingCanonicalSnapshot()) {
                 Logger.getLogger(GraphInternalFrame.class.getName()).log(
                         Level.INFO,
                         "[VISUALIZATION JENA] Built graph directly from canonical snapshot."
                 );
-            } else if (populateGraphUsingCompatibilitySwkmModel()) {
+                graphPopulated = true;
+            } else if (shouldAllowSwkmVisualizationFallback() && populateGraphUsingCompatibilitySwkmModel()) {
                 Logger.getLogger(GraphInternalFrame.class.getName()).log(
                         Level.INFO,
                         "[VISUALIZATION FALLBACK] Used SWKM compatibility model for graph rendering."
                 );
-            } else {
-                Logger.getLogger(GraphInternalFrame.class.getName()).log(Level.SEVERE, null, e);
+                graphPopulated = true;
             }
+        } else {
+            try {
+                graphController.populateGraph(getParentProj().getModel());
+                graphPopulated = true;
+            } catch (Exception e) {
+                // In non-JENA modes, keep compatibility fallback behavior.
+                if (populateGraphUsingCanonicalSnapshot()) {
+                    Logger.getLogger(GraphInternalFrame.class.getName()).log(
+                            Level.INFO,
+                            "[VISUALIZATION JENA] Built graph directly from canonical snapshot."
+                    );
+                    graphPopulated = true;
+                } else if (shouldAllowSwkmVisualizationFallback() && populateGraphUsingCompatibilitySwkmModel()) {
+                    Logger.getLogger(GraphInternalFrame.class.getName()).log(
+                            Level.INFO,
+                            "[VISUALIZATION FALLBACK] Used SWKM compatibility model for graph rendering."
+                    );
+                    graphPopulated = true;
+                } else {
+                    Logger.getLogger(GraphInternalFrame.class.getName()).log(Level.SEVERE, null, e);
+                }
+            }
+        }
+        if (populateGraphFromPlainDocuments()) {
+            graphPopulated = true;
+        }
+        if (!graphPopulated && !graph.getNodeList().isEmpty()) {
+            graphPopulated = true;
+        }
+        if (!graphPopulated) {
+            Logger.getLogger(GraphInternalFrame.class.getName()).log(
+                    Level.WARNING,
+                    "[VISUALIZATION] Graph population produced no drawable nodes."
+            );
         }
 //                        break;
 //                    case TXT:
 //                    case XML:
-        try {
-            for(String ns:graph.getNamespaces()){
-                InputStream is = getParentProj().getPlainDocAsStream(ns);
-                if(is != null){
-                    graphController.populateGraph(is,ns);
-                }
-            }
-            
-        } catch (IOException ex) {
-            Logger.getLogger(GraphInternalFrame.class.getName()).log(Level.SEVERE, null, ex);
+        if (graphPopulated && !hasSelectedPlainDocuments) {
+            runLegacyParityCheck("GraphInternalFrame.createGraph");
         }
-
-        runLegacyParityCheck("GraphInternalFrame.createGraph");
 //                    default:
 //                        assert(false);
 //                    break;
 //                }
         //Create the ranker of the graph for top-k viewing
-        graph.createGraphRanker();
+        if (graphPopulated) {
+            graph.createGraphRanker();
+        }
         graph.visualizeGraphElements();
 
-        updateGraph(layout, params);
+        if (graphPopulated) {
+            updateGraph(layout, params);
+        }
 
         //Create a new JScrollpane to accommodate visual graph
         spane = new JScrollPane(graph.getVisualGraph());
@@ -774,7 +802,7 @@ public class GraphInternalFrame extends InternalFrame{
 
     private void runLegacyParityCheck(String operation) {
         GraphBackendMode mode = GraphBackendMode.resolveDefault();
-        if (mode == GraphBackendMode.SWKM) {
+        if (mode != GraphBackendMode.DUAL) {
             return;
         }
 
@@ -804,6 +832,38 @@ public class GraphInternalFrame extends InternalFrame{
                     ex
             );
         }
+    }
+
+    private boolean shouldAllowSwkmVisualizationFallback() {
+        return GraphBackendMode.resolveDefault() == GraphBackendMode.DUAL;
+    }
+
+    private boolean hasSelectedPlainDocuments() {
+        for (String ns : graph.getNamespaces()) {
+            if (getParentProj().getPlainDocAsStream(ns) != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean populateGraphFromPlainDocuments() {
+        boolean populated = false;
+        try {
+            for (String ns : graph.getNamespaces()) {
+                InputStream is = getParentProj().getPlainDocAsStream(ns);
+                if (is != null) {
+                    graphController.populateGraph(is, ns);
+                    populated = true;
+                }
+            }
+        } catch (IOException ex) {
+            Logger.getLogger(GraphInternalFrame.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (RuntimeException ex) {
+            Logger.getLogger(GraphInternalFrame.class.getName()).log(Level.SEVERE,
+                    "[VISUALIZATION TXT] Failed to populate graph from plain documents.", ex);
+        }
+        return populated;
     }
 
     private void logParityReport(String operation, ParityReport report) {
@@ -867,7 +927,7 @@ public class GraphInternalFrame extends InternalFrame{
             graphController.populateGraph(graphSnapshot);
             return true;
         } catch (Exception ex) {
-            Logger.getLogger(GraphInternalFrame.class.getName()).log(Level.FINE,
+            Logger.getLogger(GraphInternalFrame.class.getName()).log(Level.WARNING,
                     "[VISUALIZATION JENA] Canonical graph population failed.", ex);
             return false;
         }

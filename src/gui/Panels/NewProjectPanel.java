@@ -604,15 +604,24 @@ private void jButton3ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRS
         nProj = new Project(null);
     }
     String fileName = jTextField2.getText();
+    File f = new File(fileName);
+    if (!f.exists()) {
+        JOptionPane.showMessageDialog(null, "The file specified doesn't exist", "Alert", JOptionPane.ERROR_MESSAGE);
+        return;
+    }
+    if (!isSupportedRdfLocalFile(fileName)) {
+        JOptionPane.showMessageDialog(
+                null,
+                "Unsupported local RDF file format.\nSupported: .rdf, .rdfs, .ttl, .owl",
+                "Unsupported File",
+                JOptionPane.ERROR_MESSAGE
+        );
+        return;
+    }
     nProj.addDocument(fileName, Project.LOCATION_TYPE.LOCAL, null);
     if (fileName != null) {
         files.add(fileName);
         jList1.setListData(files.toArray());
-    }
-    File f = new File(fileName);
-    if (!f.exists()) {
-        JOptionPane.showMessageDialog(null, "The file specified doesn't exist", "Alert", JOptionPane.ERROR_MESSAGE);
-
     }
     namespaceList.setListData(nProj.getProjectNamespaces().toArray());
 }//GEN-LAST:event_jButton3ActionPerformed
@@ -838,6 +847,27 @@ private void jComboBox2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FI
         }//end catch
         return null;
     }//end parseNamespaces
+
+    private boolean isSupportedRdfLocalFile(String path) {
+        return hasExtension(path, "rdf", "rdfs", "ttl", "owl");
+    }
+
+    private boolean hasExtension(String path, String... supportedExtensions) {
+        if (path == null) {
+            return false;
+        }
+        int dot = path.lastIndexOf('.');
+        if (dot < 0 || dot == path.length() - 1) {
+            return false;
+        }
+        String ext = path.substring(dot + 1).toLowerCase();
+        for (String supported : supportedExtensions) {
+            if (supported.equals(ext)) {
+                return true;
+            }
+        }
+        return false;
+    }
 
 
     // Variables declaration - do not modify//GEN-BEGIN:variables

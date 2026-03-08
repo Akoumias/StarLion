@@ -5,6 +5,9 @@ import java.io.InputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.File;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -66,11 +69,28 @@ public class JenaCanonicalAdapter {
     public CanonicalRdfSnapshot fromRdfDocuments(Iterable<RdfDocument> documents) {
         Model model = ModelFactory.createDefaultModel();
         for (RdfDocument document : documents) {
-            if (document == null || document.getContent() == null) {
+            if (document == null) {
                 continue;
             }
-            byte[] payload = document.getContent().getBytes(java.nio.charset.StandardCharsets.UTF_8);
-            Model parsed = parseModel(payload, document.getURI(), String.valueOf(document.getFormat()));
+
+            String docUri = document.getURI();
+            String parseFormat = document.getFormat() == null ? null : String.valueOf(document.getFormat());
+            Model parsed;
+
+            String localPath = resolveLocalFilePath(docUri);
+            if (localPath != null) {
+                try (InputStream fileStream = new FileInputStream(localPath)) {
+                    byte[] payload = readBytes(fileStream);
+                    parsed = parseModel(payload, docUri, parseFormat);
+                } catch (IOException ioException) {
+                    throw new IllegalStateException("Unable to read local RDF file for Jena mapping: " + localPath, ioException);
+                }
+            } else if (document.getContent() != null) {
+                byte[] payload = document.getContent().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                parsed = parseModel(payload, docUri, parseFormat);
+            } else {
+                continue;
+            }
             model.add(parsed);
         }
         return fromJenaModel(model);
@@ -85,14 +105,6 @@ public class JenaCanonicalAdapter {
         Set<String> properties = new HashSet<>();
         Set<String> instances = new HashSet<>();
         Set<String> propertyInstances = new HashSet<>();
-
-        for (Map.Entry<String, String> ns : model.getNsPrefixMap().entrySet()) {
-            if (ns.getValue() != null && !ns.getValue().isEmpty()) {
-                addNamespaceCandidate(namespaces, ns.getValue());
-            }
-        }
-
-        bootstrapVocabularySafely(classes, properties, namespaces);
 
         ResIterator classIterator = model.listResourcesWithProperty(RDF.type, RDFS.Class);
         while (classIterator.hasNext()) {
@@ -148,13 +160,9 @@ public class JenaCanonicalAdapter {
             Resource subject = statement.getSubject();
             Property predicate = statement.getPredicate();
             RDFNode object = statement.getObject();
-            if (subject.isURIResource()) {
-                addNamespaceCandidate(namespaces, subject.getURI());
-            }
             if (predicate != null && predicate.getURI() != null) {
                 String predicateUri = CanonicalNameUtils.normalizeUri(predicate.getURI());
                 properties.add(predicateUri);
-                addNamespaceCandidate(namespaces, predicate.getURI());
             }
 
             if (RDF.type.equals(predicate) && object.isURIResource()) {
@@ -171,9 +179,6 @@ public class JenaCanonicalAdapter {
                     }
                 }
                 classes.add(objectUri);
-                if (objectResource.getURI() != null) {
-                    addNamespaceCandidate(namespaces, objectResource.getURI());
-                }
             } else if (RDFS.subClassOf.equals(predicate)) {
                 if (subject.isURIResource()) {
                     classes.add(CanonicalNameUtils.normalizeUri(subject.getURI()));
@@ -195,7 +200,6 @@ public class JenaCanonicalAdapter {
                 if (object.isURIResource()) {
                     String objectUri = CanonicalNameUtils.normalizeUri(object.asResource().getURI());
                     classes.add(objectUri);
-                    addNamespaceCandidate(namespaces, object.asResource().getURI());
                 }
                 String subjectUri = subject.isURIResource()
                         ? CanonicalNameUtils.normalizeUri(subject.getURI())
@@ -216,9 +220,29 @@ public class JenaCanonicalAdapter {
                     propertyInstances.add(subjectUri + "|" + predicateUri + "|" + objectValue);
                 }
             }
-            if (object.isURIResource() && object.asResource().getURI() != null) {
-                addNamespaceCandidate(namespaces, object.asResource().getURI());
+        }
+
+        // Keep namespace list aligned with SWKM expectations:
+        // use only namespaces that actually host discovered classes/properties.
+        for (String classUri : classes) {
+            addNamespaceCandidate(namespaces, classUri);
+        }
+        for (String propertyUri : properties) {
+            addNamespaceCandidate(namespaces, propertyUri);
+        }
+        // Include instance namespaces as well, otherwise data-only graphs
+        // (e.g., simple N-Triples streams) can end up with empty visual output
+        // after namespace filtering.
+        for (String instanceUri : instances) {
+            addNamespaceCandidate(namespaces, instanceUri);
+        }
+        for (String stmt : propertyInstances) {
+            String[] parts = stmt.split("\\|", 3);
+            if (parts.length < 3) {
+                continue;
             }
+            addNamespaceCandidate(namespaces, parts[0]);
+            addNamespaceCandidate(namespaces, parts[2]);
         }
 
         return new CanonicalRdfSnapshot(
@@ -454,6 +478,7 @@ public class JenaCanonicalAdapter {
      */
     private Model parseModel(byte[] payload, String baseUri, String preferredFormat) {
         Model model = ModelFactory.createDefaultModel();
+        String parserBase = normalizeBaseUri(baseUri);
         List<Lang> candidates = new ArrayList<Lang>();
         Lang preferredLang = toLang(preferredFormat);
         if (preferredLang != null) {
@@ -476,7 +501,7 @@ public class JenaCanonicalAdapter {
                 RDFParser.create()
                         .source(new ByteArrayInputStream(payload))
                         .lang(lang)
-                        .base(baseUri)
+                        .base(parserBase)
                         .parse(attempt.getGraph());
                 return attempt;
             } catch (RuntimeException ex) {
@@ -488,6 +513,47 @@ public class JenaCanonicalAdapter {
             throw last;
         }
         return model;
+    }
+
+    /**
+     * Ensures parser base is a valid URI on all OSes (especially Windows paths).
+     */
+    private String normalizeBaseUri(String baseUri) {
+        if (baseUri == null || baseUri.trim().isEmpty()) {
+            return "urn:starlion:base#";
+        }
+
+        String trimmed = baseUri.trim();
+        if (trimmed.endsWith("#")) {
+            trimmed = trimmed.substring(0, trimmed.length() - 1);
+        }
+        if (trimmed.isEmpty()) {
+            return "urn:starlion:base#";
+        }
+        // Windows drive-letter paths (e.g. C:\path\file.rdf) are not valid URI bases
+        // for Jena as-is; convert them to file:/// URIs explicitly.
+        if (trimmed.matches("^[A-Za-z]:[\\\\/].*")) {
+            try {
+                return new File(trimmed).toURI().toString();
+            } catch (Exception ignored) {
+                return "urn:starlion:base#";
+            }
+        }
+
+        try {
+            URI uri = new URI(trimmed);
+            if (uri.isAbsolute()) {
+                return uri.toString();
+            }
+        } catch (URISyntaxException ignored) {
+            // Try filesystem path normalization below.
+        }
+
+        try {
+            return new File(trimmed).toURI().toString();
+        } catch (Exception ignored) {
+            return "urn:starlion:base#";
+        }
     }
 
     private Lang toLang(String format) {
@@ -525,6 +591,24 @@ public class JenaCanonicalAdapter {
         } catch (IOException ioException) {
             throw new IllegalStateException("Unable to read RDF payload", ioException);
         }
+    }
+
+    private String resolveLocalFilePath(String documentUri) {
+        if (documentUri == null || documentUri.trim().isEmpty()) {
+            return null;
+        }
+        String candidate = documentUri.trim();
+        if (candidate.endsWith("#")) {
+            candidate = candidate.substring(0, candidate.length() - 1);
+        }
+        if (candidate.isEmpty()) {
+            return null;
+        }
+        File file = new File(candidate);
+        if (file.exists() && file.isFile()) {
+            return file.getAbsolutePath();
+        }
+        return null;
     }
 
     private void bootstrapVocabulary(Set<String> classes, Set<String> properties, Set<String> namespaces) {
@@ -647,6 +731,14 @@ public class JenaCanonicalAdapter {
         if (trimmed.isEmpty()) {
             return false;
         }
+        // Typed-literal payloads like "1998^^http://...#integer" are not namespaces.
+        if (trimmed.contains("^^")) {
+            return false;
+        }
+        // Namespace values must be URI-like; literals with spaces/slashes are not namespaces.
+        if (trimmed.matches(".*\\s+.*")) {
+            return false;
+        }
         String lower = trimmed.toLowerCase(java.util.Locale.ROOT);
         if (lower.startsWith("file:/")) {
             return false;
@@ -654,7 +746,17 @@ public class JenaCanonicalAdapter {
         if (trimmed.startsWith("/") || trimmed.matches("^[A-Za-z]:/.*")) {
             return false;
         }
-        return true;
+        if (lower.startsWith("http://")
+                || lower.startsWith("https://")
+                || lower.startsWith("urn:")) {
+            return true;
+        }
+        if (trimmed.matches("^[A-Za-z][A-Za-z0-9+.-]*:.*")) {
+            return true;
+        }
+        // Keep SWKM-style relative namespaces such as SampleRDFFiles/LOM2.rdf#
+        // while still rejecting non-URI literal text.
+        return trimmed.matches("^[^\\s\"'<>]+[#/]$");
     }
 
     private void addResourceUri(Set<String> sink, org.apache.jena.rdf.model.Resource resource) {

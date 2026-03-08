@@ -349,8 +349,15 @@ public class Project {
                  continue;
              }
              String format = normalizeFormat(document.getFormat());
-             InputStream payload = new ByteArrayInputStream(document.getContent().getBytes(StandardCharsets.UTF_8));
-             boolean loaded = rdfService.read(payload, document.getURI(), format, true);
+             String localFilePath = resolveLocalFilePath(document.getURI());
+             boolean loaded;
+             if (localFilePath != null) {
+                 // Preserve original file bytes for local docs (important for parser stability on Windows).
+                 loaded = rdfService.read(localFilePath, document.getURI(), format, true);
+             } else {
+                 InputStream payload = new ByteArrayInputStream(document.getContent().getBytes(StandardCharsets.UTF_8));
+                 loaded = rdfService.read(payload, document.getURI(), format, true);
+             }
              if (!loaded) {
                  throw new IllegalStateException("Failed to load RDF document: " + document.getURI());
              }
@@ -389,6 +396,24 @@ public class Project {
              }
          }
          return false;
+     }
+
+     private String resolveLocalFilePath(String documentUri) {
+         if (documentUri == null || documentUri.trim().isEmpty()) {
+             return null;
+         }
+         String candidate = documentUri.trim();
+         if (candidate.endsWith("#")) {
+             candidate = candidate.substring(0, candidate.length() - 1);
+         }
+         if (candidate.isEmpty()) {
+             return null;
+         }
+         File file = new File(candidate);
+         if (file.exists() && file.isFile()) {
+             return file.getAbsolutePath();
+         }
+         return null;
      }
      
 

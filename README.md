@@ -8,7 +8,7 @@ It now supports an incremental backend migration from SWKM to Apache Jena, with 
 
 ### Prerequisites
 
-- JDK 11 or newer installed (`java -version`)
+- JDK 11 or newer installed up to jdk 17 (`java -version`)
 - Internet access for first dependency download
 - Git (optional, only if cloning)
 
@@ -49,7 +49,7 @@ If dependencies fail to resolve:
 
 ## 3) Run the App (Default Mode)
 
-Default backend mode is `SWKM` unless overridden.
+Default backend mode is `JENA` unless overridden.
 
 ```bash
 # Linux/macOS
@@ -66,8 +66,8 @@ gradlew.bat run
 StarLion supports 3 modes via `starlion.backend.mode`.
 
 - `SWKM` -> legacy backend behavior
-- `DUAL` -> compare SWKM vs Jena outputs (parity-oriented mode)
-- `JENA` -> Jena-first parsing, with SWKM fallback for unsupported inputs
+- `DUAL` -> runs both and compares SWKM vs Jena outputs (parity-oriented mode) , if swkm breaks on file parsing this breaks too
+- `JENA` -> Jena-first parsing, with SWKM fallback for unsupported inputs (this doesnt break if swkm doesnt work because its for fallback only)
 
 ### Linux/macOS
 
@@ -128,6 +128,22 @@ Run it:
 java -jar build/libs/StarLion-1.0.0-all.jar
 ```
 
+Run fat JAR with a specific backend mode:
+
+```bash
+# Linux/macOS
+java -Dstarlion.backend.mode=SWKM -jar build/libs/StarLion-1.0.0-all.jar
+java -Dstarlion.backend.mode=DUAL -jar build/libs/StarLion-1.0.0-all.jar
+java -Dstarlion.backend.mode=JENA -jar build/libs/StarLion-1.0.0-all.jar
+```
+
+```bat
+:: Windows
+java -Dstarlion.backend.mode=SWKM -jar build\libs\StarLion-1.0.0-all.jar
+java -Dstarlion.backend.mode=DUAL -jar build\libs\StarLion-1.0.0-all.jar
+java -Dstarlion.backend.mode=JENA -jar build\libs\StarLion-1.0.0-all.jar
+```
+
 ### Option B: Release Bundle (recommended for sharing)
 
 ```bash
@@ -137,7 +153,9 @@ java -jar build/libs/StarLion-1.0.0-all.jar
 Output:
 
 - `release/starlion-app/bin/run.sh` (Linux/macOS)
+- `release/starlion-app/bin/run-jena.sh` (Linux/macOS, JENA mode)
 - `release/starlion-app/bin/run.bat` (Windows)
+- `release/starlion-app/bin/run-jena.bat` (Windows, JENA mode)
 - `release/starlion-app/lib/StarLion-all.jar`
 
 ## 8) Key Features

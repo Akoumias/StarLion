@@ -16,16 +16,19 @@ public enum GraphBackendMode {
             value = System.getenv("STARLION_BACKEND_MODE");
         }
         if (value == null || value.trim().isEmpty()) {
-            return SWKM;
+            return JENA;
         }
 
         String normalized = value.trim().toUpperCase();
+        if ("SWKM".equals(normalized)) {
+            return SWKM;
+        }
         if ("DUAL".equals(normalized)) {
             return DUAL;
         }
         if ("JENA".equals(normalized)) {
             return JENA;
         }
-        return SWKM;
+        return JENA;
     }
 }

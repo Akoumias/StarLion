@@ -951,7 +951,47 @@ public class Graph {
         int colorCounter = 0;
 
         HashMap<String, Node> nodeById = new HashMap<String, Node>();
-        for (CanonicalNode canonicalNode : snapshot.getNodes()) {
+        colorCounter = appendCanonicalNodes(snapshot.getNodes(), activeNamespaces, true, namespaceColors, colorCounter, nodeById);
+        if (nodeList.isEmpty() && !snapshot.getNodes().isEmpty() && !activeNamespaces.isEmpty()) {
+            // If namespace matching removes every node, fallback to unfiltered canonical nodes
+            // so valid graphs are still visible when namespace strings differ in formatting.
+            nodeList.clear();
+            nodeById.clear();
+            namespaceColors.clear();
+            colorCounter = 0;
+            colorCounter = appendCanonicalNodes(snapshot.getNodes(), activeNamespaces, false, namespaceColors, colorCounter, nodeById);
+        }
+
+        for (CanonicalEdge canonicalEdge : snapshot.getEdges()) {
+            Node source = nodeById.get(canonicalEdge.getSourceId());
+            Node target = nodeById.get(canonicalEdge.getTargetId());
+            if (source == null || target == null) {
+                continue;
+            }
+
+            SEMWEB_OBJECT_TYPE edgeType = toGraphEdgeType(canonicalEdge.getType());
+            String label = canonicalEdge.getLabel() == null ? "" : canonicalEdge.getLabel();
+            int edgeIndex = source.getEdgesNoToNode(target);
+            Edge edge = new Edge(this, source, target, label, edgeType, edgeIndex, canonicalEdge.isDirected());
+            edge.setVisible(canonicalEdge.isVisible());
+            source.addEdgeFrom(edge);
+            target.addEdgeTo(edge);
+            edgeList.put(canonicalEdge.getId() + source.getName() + target.getName(), edge);
+        }
+
+        maxXrange = nodeList.size() * 120;
+        maxYrange = nodeList.size() * 50;
+    }
+
+    private int appendCanonicalNodes(
+            List<CanonicalNode> canonicalNodes,
+            Set<String> activeNamespaces,
+            boolean enforceNamespaceFilter,
+            Map<String, Color> namespaceColors,
+            int colorCounter,
+            Map<String, Node> nodeById
+    ) {
+        for (CanonicalNode canonicalNode : canonicalNodes) {
             String nodeName = canonicalNode.getName();
             if (nodeName == null || nodeName.trim().isEmpty()) {
                 nodeName = Utilities.extractLocalPartFromURI(canonicalNode.getUri());
@@ -967,7 +1007,7 @@ public class Graph {
             if (namespace == null || namespace.trim().isEmpty()) {
                 namespace = "";
             }
-            if (!activeNamespaces.isEmpty() && !activeNamespaces.contains(namespace)) {
+            if (enforceNamespaceFilter && !activeNamespaces.isEmpty() && !activeNamespaces.contains(namespace)) {
                 continue;
             }
 
@@ -999,26 +1039,7 @@ public class Graph {
             }
             nodeById.put(node.getName(), node);
         }
-
-        for (CanonicalEdge canonicalEdge : snapshot.getEdges()) {
-            Node source = nodeById.get(canonicalEdge.getSourceId());
-            Node target = nodeById.get(canonicalEdge.getTargetId());
-            if (source == null || target == null) {
-                continue;
-            }
-
-            SEMWEB_OBJECT_TYPE edgeType = toGraphEdgeType(canonicalEdge.getType());
-            String label = canonicalEdge.getLabel() == null ? "" : canonicalEdge.getLabel();
-            int edgeIndex = source.getEdgesNoToNode(target);
-            Edge edge = new Edge(this, source, target, label, edgeType, edgeIndex, canonicalEdge.isDirected());
-            edge.setVisible(canonicalEdge.isVisible());
-            source.addEdgeFrom(edge);
-            target.addEdgeTo(edge);
-            edgeList.put(canonicalEdge.getId() + source.getName() + target.getName(), edge);
-        }
-
-        maxXrange = nodeList.size() * 120;
-        maxYrange = nodeList.size() * 50;
+        return colorCounter;
     }
 
     private SEMWEB_OBJECT_TYPE toGraphEdgeType(CanonicalElementType type) {
@@ -1791,18 +1812,21 @@ public class Graph {
         }
         System.out.println("FDPA execution");
         if (topKmode) {
-            if (topKnodeList.isEmpty() || topKnodeList == null) {
+            if (topKnodeList == null || topKnodeList.isEmpty()) {
                 System.out.println("In force directed application:topKnodeList EMPTY");
+                return false;
             }
             smartNodeList = new Hashtable<String, Node>(topKnodeList);
         } else if (starGraphMode) {
-            if (starGnodeList.isEmpty() || starGnodeList == null) {
+            if (starGnodeList == null || starGnodeList.isEmpty()) {
                 System.out.println("In force directed application:starGnodeList EMPTY");
+                return false;
             }
             smartNodeList = new Hashtable<String, Node>(starGnodeList);
         } else {
-            if (nodeList.isEmpty() || nodeList == null) {
+            if (nodeList == null || nodeList.isEmpty()) {
                 System.out.println("In force directed application:nodeList EMPTY");
+                return false;
             }
             smartNodeList = new Hashtable<String, Node>(nodeList);
             //**************************************************************************************

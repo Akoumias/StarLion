@@ -28,11 +28,27 @@ java -jar "$APP_DIR/lib/StarLion-all.jar" "$@"
 EOF
 chmod +x "$OUT_DIR/bin/run.sh"
 
+cat > "$OUT_DIR/bin/run-jena.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+java -Dstarlion.backend.mode=JENA -jar "$APP_DIR/lib/StarLion-all.jar" "$@"
+EOF
+chmod +x "$OUT_DIR/bin/run-jena.sh"
+
 cat > "$OUT_DIR/bin/run.bat" <<'EOF'
 @echo off
 setlocal
 set APP_DIR=%~dp0..
 java -jar "%APP_DIR%\lib\StarLion-all.jar" %*
+EOF
+
+cat > "$OUT_DIR/bin/run-jena.bat" <<'EOF'
+@echo off
+setlocal
+set APP_DIR=%~dp0..
+java -Dstarlion.backend.mode=JENA -jar "%APP_DIR%\lib\StarLion-all.jar" %*
 EOF
 
 cat > "$OUT_DIR/README.txt" <<'EOF'
@@ -41,11 +57,9 @@ StarLion release bundle
 
 Run:
   ./bin/run.sh
+  ./bin/run-jena.sh
   bin\run.bat
-
-Optional arguments:
-  ./bin/run.sh -Dstarlion.backend.mode=JENA
-  bin\run.bat -Dstarlion.backend.mode=JENA
+  bin\run-jena.bat
 
 Included:
   - lib/StarLion-all.jar

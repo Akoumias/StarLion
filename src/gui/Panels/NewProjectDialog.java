@@ -38,6 +38,7 @@ import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import org.w3c.dom.Document;
@@ -641,7 +642,11 @@ public class NewProjectDialog extends javax.swing.JDialog {
     private void jButton2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton2ActionPerformed
         JFileChooser fc = new JFileChooser();
         fc.setFileSelectionMode(JFileChooser.FILES_ONLY);
-        fc.setFileFilter(new RDFFileFilter());
+        if (txtSelector.isSelected()) {
+            fc.setFileFilter(new FileNameExtensionFilter("TXT files", "txt"));
+        } else {
+            fc.setFileFilter(new RDFFileFilter());
+        }
         int returnVal = fc.showOpenDialog(MainFrame.getSingleton());
 
         if (returnVal == JFileChooser.APPROVE_OPTION) {
@@ -661,6 +666,15 @@ public class NewProjectDialog extends javax.swing.JDialog {
             return;
         }
         if (rdfselector.isSelected()) {
+            if (!isSupportedRdfLocalFile(fileName)) {
+                JOptionPane.showMessageDialog(
+                        null,
+                        "Unsupported local RDF file format.\nSupported: .rdf, .rdfs, .ttl, .owl",
+                        "Unsupported File",
+                        JOptionPane.ERROR_MESSAGE
+                );
+                return;
+            }
             try {
                 nProj.addDocument(fileName, Project.LOCATION_TYPE.LOCAL, null);
             } catch (gr.forth.ics.rdfsuite.services.exceptions.ParsingException pe) {
@@ -675,6 +689,15 @@ public class NewProjectDialog extends javax.swing.JDialog {
                 JOptionPane.showMessageDialog(null, "Runtime Exception: Report the bug to the developers", "Alert", JOptionPane.ERROR_MESSAGE);
             }
         } else if (txtSelector.isSelected()) {
+            if (!isTxtFile(fileName)) {
+                JOptionPane.showMessageDialog(
+                        null,
+                        "TXT mode accepts only .txt files.",
+                        "Unsupported File",
+                        JOptionPane.ERROR_MESSAGE
+                );
+                return;
+            }
             //TODO:19/7/12 Here in the future we should have an exception handling
             //when we create the TXTModel
             nProj.addDocument(fileName, Project.LOCATION_TYPE.TXT, null);
@@ -918,6 +941,31 @@ public class NewProjectDialog extends javax.swing.JDialog {
         }//end catch
         return null;
     }//end parseNamespaces
+
+    private boolean isSupportedRdfLocalFile(String path) {
+        return hasExtension(path, "rdf", "rdfs", "ttl", "owl");
+    }
+
+    private boolean isTxtFile(String path) {
+        return hasExtension(path, "txt");
+    }
+
+    private boolean hasExtension(String path, String... supportedExtensions) {
+        if (path == null) {
+            return false;
+        }
+        int dot = path.lastIndexOf('.');
+        if (dot < 0 || dot == path.length() - 1) {
+            return false;
+        }
+        String ext = path.substring(dot + 1).toLowerCase();
+        for (String supported : supportedExtensions) {
+            if (supported.equals(ext)) {
+                return true;
+            }
+        }
+        return false;
+    }
 
      public boolean ok(){
         //Retrieve user's layout options
