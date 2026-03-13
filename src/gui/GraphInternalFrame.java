@@ -835,7 +835,8 @@ public class GraphInternalFrame extends InternalFrame{
     }
 
     private boolean shouldAllowSwkmVisualizationFallback() {
-        return GraphBackendMode.resolveDefault() == GraphBackendMode.DUAL;
+        GraphBackendMode mode = GraphBackendMode.resolveDefault();
+        return mode == GraphBackendMode.DUAL || mode == GraphBackendMode.JENA;
     }
 
     private boolean hasSelectedPlainDocuments() {
@@ -910,6 +911,10 @@ public class GraphInternalFrame extends InternalFrame{
     private boolean populateGraphUsingCompatibilitySwkmModel() {
         try {
             RDFModel compatibilityModel = buildCompatibilitySwkmModel();
+            String[] ns = compatibilityModel.getNamespaces();
+            if (ns != null && ns.length > 0) {
+                graph.setGraphNameSpaces(ns);
+            }
             graphController.populateGraph(compatibilityModel);
             return true;
         } catch (Exception ex) {

@@ -94,7 +94,9 @@ dependencies {
     // Local JAR files that don't have Maven equivalents
     implementation fileTree(dir: 'lib', include: [
         'exporter.jar',
-        // java_cup.jar, JFlex.jar: parser generators — not imported by app code
+        // java_cup runtime is required by SWKM TriG parser on CIDOC fallback.
+        'java_cup.jar',
+        // JFlex.jar: parser generator tool, not required at runtime
         // ng4j.jar, relaxngDatatype.jar: not imported by app code
         'jgraph.jar',
         'SwkmClient.jar',

@@ -348,22 +348,45 @@ public class Project {
              if (document == null || document.getContent() == null) {
                  continue;
              }
-             String format = normalizeFormat(document.getFormat());
-             String localFilePath = resolveLocalFilePath(document.getURI());
-             boolean loaded;
-             if (localFilePath != null) {
-                 // Preserve original file bytes for local docs (important for parser stability on Windows).
-                 loaded = rdfService.read(localFilePath, document.getURI(), format, true);
-             } else {
-                 InputStream payload = new ByteArrayInputStream(document.getContent().getBytes(StandardCharsets.UTF_8));
-                 loaded = rdfService.read(payload, document.getURI(), format, true);
+             try {
+                 String format = normalizeFormat(document.getFormat());
+                 String localFilePath = resolveLocalFilePath(document.getURI());
+                 boolean loaded;
+                 if (localFilePath != null) {
+                     // Preserve original file bytes for local docs (important for parser stability on Windows).
+                     loaded = rdfService.read(localFilePath, document.getURI(), format, true);
+                 } else {
+                     InputStream payload = new ByteArrayInputStream(document.getContent().getBytes(StandardCharsets.UTF_8));
+                     loaded = rdfService.read(payload, document.getURI(), format, true);
+                 }
+                 if (!loaded) {
+                     Logger.getLogger(Project.class.getName()).log(
+                             Level.WARNING,
+                             "Failed to load RDF document for namespace extraction: {0}",
+                             document.getURI()
+                     );
+                     logDocumentBackendSummary(document.getURI(), 0);
+                     continue;
+                 }
+                 CanonicalRdfSnapshot snapshot = rdfService.getCanonicalSnapshot();
+                 Collection<String> snapshotNs = snapshot.getNamespaces();
+                 int docNamespaceCount = 0;
+                 if (snapshotNs != null && !snapshotNs.isEmpty()) {
+                     effectiveNamespaces.addAll(snapshotNs);
+                     docNamespaceCount = snapshotNs.size();
+                 } else {
+                     Collection<String> swkmNs = extractSwkmNamespacesForDocument(document, format, localFilePath);
+                     effectiveNamespaces.addAll(swkmNs);
+                     docNamespaceCount = swkmNs.size();
+                 }
+                 logDocumentBackendSummary(document.getURI(), docNamespaceCount);
+             } catch (RuntimeException ex) {
+                 Logger.getLogger(Project.class.getName()).log(
+                         Level.WARNING,
+                         "Namespace extraction failed for document: " + document.getURI(),
+                         ex
+                 );
              }
-             if (!loaded) {
-                 throw new IllegalStateException("Failed to load RDF document: " + document.getURI());
-             }
-             CanonicalRdfSnapshot snapshot = rdfService.getCanonicalSnapshot();
-             effectiveNamespaces.addAll(snapshot.getNamespaces());
-             logDocumentBackendSummary(document.getURI(), snapshot.getNamespaces().size());
          }
      }
 
@@ -414,6 +437,35 @@ public class Project {
              return file.getAbsolutePath();
          }
          return null;
+     }
+
+     private Collection<String> extractSwkmNamespacesForDocument(RdfDocument document, String format, String localFilePath) {
+         LinkedHashSet<String> namespaces = new LinkedHashSet<String>();
+         try {
+             RDFModel fallbackModel = new RDFModel();
+             boolean loaded;
+             if (localFilePath != null) {
+                 loaded = fallbackModel.read(localFilePath, document.getURI(), format, true);
+             } else {
+                 InputStream payload = new ByteArrayInputStream(document.getContent().getBytes(StandardCharsets.UTF_8));
+                 loaded = fallbackModel.read(payload, document.getURI(), format, true);
+             }
+             if (!loaded) {
+                 return namespaces;
+             }
+             String[] swkmNs = fallbackModel.getNamespaces();
+             if (swkmNs == null) {
+                 return namespaces;
+             }
+             for (String ns : swkmNs) {
+                 if (ns != null && !ns.trim().isEmpty()) {
+                     namespaces.add(ns);
+                 }
+             }
+         } catch (RuntimeException ignored) {
+             // Keep empty fallback set; caller already has canonical path attempt.
+         }
+         return namespaces;
      }
      
 
