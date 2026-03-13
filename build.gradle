@@ -49,14 +49,44 @@ dependencies {
     implementation 'com.sun.xml.bind:jaxb-core:2.3.0.1'
     implementation 'javax.xml.ws:jaxws-api:2.3.1'
     implementation 'com.sun.xml.ws:jaxws-rt:2.3.0'
-    implementation 'com.sun.xml.ws:jaxws-tools:2.3.0'
+    // jaxws-tools is compile-time tooling (xjc, jxc, wsimport) not needed at runtime.
+    // Excluding it saves ~1.9 MB in the fat JAR.
+    // implementation 'com.sun.xml.ws:jaxws-tools:2.3.0'
     implementation 'javax.xml.soap:saaj-api:1.3.5'
     implementation 'com.sun.xml.messaging.saaj:saaj-impl:1.5.0'
 
     // Graph visualization
     implementation 'org.jgrapht:jgrapht-core:1.5.1'
-    implementation 'org.apache.jena:jena-core:4.10.0'
-    implementation 'org.apache.jena:jena-arq:4.10.0'
+    implementation('org.apache.jena:jena-core:4.10.0') {
+        exclude group: 'com.github.jsonld-java'
+        exclude group: 'com.apicatalog'
+        exclude group: 'org.glassfish', module: 'jakarta.json'
+        exclude group: 'com.google.protobuf'
+        exclude group: 'com.fasterxml.jackson.core'
+        // Compile-time annotations — no runtime impact
+        exclude group: 'org.checkerframework'
+        exclude group: 'com.google.errorprone'
+        // TDB/SPARQL-only deps — testing if safe for in-memory parsing
+        exclude group: 'org.roaringbitmap'
+        exclude group: 'com.github.andrewoma.dexx'
+        exclude group: 'commons-cli', module: 'commons-cli'
+        exclude group: 'org.apache.commons', module: 'commons-csv'
+    }
+    implementation('org.apache.jena:jena-arq:4.10.0') {
+        exclude group: 'com.github.jsonld-java'
+        exclude group: 'com.apicatalog'
+        exclude group: 'org.glassfish', module: 'jakarta.json'
+        exclude group: 'com.google.protobuf'
+        exclude group: 'com.fasterxml.jackson.core'
+        // Compile-time annotations — no runtime impact
+        exclude group: 'org.checkerframework'
+        exclude group: 'com.google.errorprone'
+        // TDB/SPARQL-only deps — testing if safe for in-memory parsing
+        exclude group: 'org.roaringbitmap'
+        exclude group: 'com.github.andrewoma.dexx'
+        exclude group: 'commons-cli', module: 'commons-cli'
+        exclude group: 'org.apache.commons', module: 'commons-csv'
+    }
 
     // Local JAR files that don't have Maven equivalents
     implementation fileTree(dir: 'lib', include: [
@@ -66,9 +96,8 @@ dependencies {
         'jgraph.jar',
         'ng4j.jar',
         'relaxngDatatype.jar',
-        'sjsxp.jar',
-        'stax-ex.jar',
-        'streambuffer.jar',
+        // sjsxp.jar, stax-ex.jar, streambuffer.jar removed — already provided
+        // as transitives of jaxws-rt (Woodstox, stax-ex:1.8, streambuffer:1.5.4)
         'SwkmClient.jar',
         'swkm-model.jar',
         'swkm-services-api.jar',
